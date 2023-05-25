@@ -12,7 +12,6 @@
 #include "libs/cJSON_Utils.h"
 #include "utils.h"
 
-
 extern char* hostnameServer;
 extern const char* nameID;
 extern const char* nameGenState;

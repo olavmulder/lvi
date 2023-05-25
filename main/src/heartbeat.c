@@ -32,16 +32,6 @@ const char* TAG_HEART = "Heartbeat";
 static int timeoutID = -1;
 static SemaphoreHandle_t xSemaphoreTimeoutID;
 uint8_t serverTimeout = 0;
-
-//wifi home         eth network      wifi network
-/*const host_t hosts[] = 
-{
-    {.ipAddr = "192.168.178.25"},
-    {.ipAddr = "192.168.2.103"},
-    {.ipAddr = "192.168.2.106"}
-};*/
-
-
 strip_t *monitoring_head;
 
 /**
@@ -341,6 +331,7 @@ int IncrementServerIpCount(bool type)
         {
             currentServerIPCount_WIFI = 0;
         }
+
         //return SendServerCountToNodes(currentServerIPCount_WIFI, 1);
     }
     else //eth =0
@@ -350,6 +341,7 @@ int IncrementServerIpCount(bool type)
         {
             currentServerIPCount_ETH = 0;
         }
+        ESP_LOGW(TAG_HEART, "%s; currentServerIPCount = %d", __func__, currentServerIPCount_ETH);
         //return SendServerCountToNodes(currentServerIPCount_ETH, 0);
     }
     return 0;

@@ -322,7 +322,6 @@ int ReceiveEth()
 
 
 //init function
-
 void ResetModule()
 {
     const char *msg = "AT+RST\r\n";

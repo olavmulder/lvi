@@ -13,6 +13,24 @@
     * 498<alloc>fail, recv ctx, heap:9340, from 30:c6::7:232>up(0, be:0), down(0, be:0), mgmt:0, xon(req:0, rsp:0), bcast:0, wnd(0, parent:00:00:00:00:00:00)
     I (474528) mesh: [RXQ]<max:32 = cfg:32 + extra:0>self:0, <max:32 = cfg:32 + extra:0>tods:0
     :32 = cfg:32 + extra:0>tods:0
+
+    probleem:   current server ontvangt heartbeat, volgt toe aan strip
+                current server gaat door, strip blijft werken,
+                ontvangt geen data, want verbroken, timer loopt af,
+                m.b.v sync gaat de status op zwart. Terwijl andere 
+                server gewoon een normale heartbeat ontvangt, er is dus connectie
+    oplossing:   alleen veranderen in changeData wanneer isAlive is false in        
+                    monitoring_head en closeState = -1.
+
+    -- connectie bij bij 1 server, wordt niet gesynct met andere server. 
+    -- connectie weg bij een node, wordt wel gesynct.   
+    -- er wordt overgeschakeld wanneer een server zijn connectie met de 
+        router verliest.\
+    --indien connectie met verbroken server herstelt wordt -> 
+        wordt er niet direct gesynct, maar er kan wel weer data heen er
+        weer worden verstuurd, maar de kleur op de server die verbroken was
+        wordt weer zwart, omdat er niet naar toe wordt gestuurd.
+    
  * TODO:
     Zaterdag:
     1.  Unit test syncalg nog een keer? KAN THUIS!!
@@ -30,8 +48,10 @@
 
     Wat er werkt(V), Wat niet werkt(X):
         X --testing heartbeat protocol on wifi(werkt niet)
-        V(2 device)testing heartbeat protocol on eth, op gui en lvi,
-            zwart scherm bij onderbreking, ook met sync
+        V(2 device), zonder sync & ..., op alle manieren ethernet kabel er uit = 
+            beeld op zwart, ook op gui. 
+            Er kan hersteld worden, door naar andere server te gaan.
+            
         v(check other server)
   
         v programma afsluiten met eth, dan kan er gewisseld worden van server
@@ -68,7 +88,6 @@ double curReceivedTemp;
 volatile CommunicationState comState = COMMUNICATION_NONE;
 
 //wifi/eth connection variables
-volatile bool Isconnected = false;
 volatile bool initSuccessfull = false;
 volatile bool is_mesh_connected = false;
 volatile bool is_eth_connected = false;
@@ -78,7 +97,7 @@ volatile bool heartbeatEnable = false;
 
 //hearbeat / error checking variables
 uint8_t ethSendingFailureCounter;
-uint8_t currentServerIPCount_ETH;
+int8_t currentServerIPCount_ETH = -1;
 uint8_t currentServerIPCount_WIFI;
 
 uint8_t serverTimeout;
@@ -112,7 +131,7 @@ void CoAP_Client_InitTask();
 //core 0
 void app_main()
 {
-    strcpy(idName, "2");
+    strcpy(idName, ID);
 
 
     //init display

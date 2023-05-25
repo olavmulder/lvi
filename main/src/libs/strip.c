@@ -84,8 +84,8 @@ void DisplayMonitoringString()
    
     for(uint8_t i = 0; i < monitoring_head->lenChildArr;i++)
     {
-        ESP_LOGI(TAG_STRIP, "id:%d, isAlive: %d, mac:%s\n", monitoring_head->childArr[i]->id,
-                monitoring_head->childArr[i]->isAlive, monitoring_head->childArr[i]->mac_wifi);
+        ESP_LOGI(TAG_STRIP, "id:%d, isAlive: %d, ip:%s\n", monitoring_head->childArr[i]->id,
+                monitoring_head->childArr[i]->isAlive, monitoring_head->childArr[i]->ip_wifi);
     }
 }
 /*void FindAllChildren(Node *node) {

@@ -27,7 +27,7 @@
 #include "lvgl.h"
 #include "driver/i2c.h"
 
-
+#define ID "2"
 
 //#include "lvgl_helpers.h"
 #define LV_TICK_PERIOD_MS 1
@@ -120,7 +120,7 @@ extern char ip_wifi[LENGTH_IP];
 extern char mac_wifi[LENGTH_IP];
 
 //hearbeat variables
-extern uint8_t currentServerIPCount_ETH;
+extern int8_t currentServerIPCount_ETH;
 extern uint8_t currentServerIPCount_WIFI;
 
 extern uint8_t serverTimeout;

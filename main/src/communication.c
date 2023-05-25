@@ -62,7 +62,9 @@ int SendData(char* msg, size_t len)
       case COMMUNICATION_WIRED:
          if(xSemaphoreTake( xSemaphoreEth, ( TickType_t ) 1000 ) == pdTRUE)
          {
-            res = SendTCPData(msg, len, currentServerIPCount_ETH+1);
+            //if(currentServerIPCount_ETH != -1)
+               res = SendTCPData(msg, len, currentServerIPCount_ETH+1);
+            //else res = -1;
             if(res < 0)
             {
                ESP_LOGW(TAG_COMM, "send eth failed");
