@@ -91,6 +91,8 @@ static void message_handler(coap_session_t*s,
         ESP_LOGI(TAG_COAP, "%s, receive coap", __func__);
         //set data in mesh_data struct 'r';
         mesh_data r =  HandleIncomingCMD(NULL, inData);
+        ESP_LOGI(TAG_COAP, "cmd: %d", r.cmd);
+        if(r.cmd == CMD_HEARTBEAT)goto end;
         //check received cmd
         if(r.cmd != CMD_ERROR && r.cmd != CMD_TO_SERVER)
         {
@@ -128,8 +130,15 @@ static void message_handler(coap_session_t*s,
                     //ESP_LOGI(TAG_COAP, "%s: esp_mesh_send: %s", __func__, data_temp.data);
                     data_temp.proto = MESH_PROTO_BIN;
                     data_temp.tos = MESH_TOS_P2P;
-                    esp_mesh_send(&mesh_leaf, &data_temp, 
+                    int res = esp_mesh_send(&mesh_leaf, &data_temp, 
                             MESH_DATA_P2P, NULL, 0);
+                    if (res != ESP_OK) {
+                        ESP_LOGW(TAG_COAP, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(res));
+                        
+                    }else
+                    {
+                        ESP_LOGW(TAG_COAP, "%s OK esp_mesh_send %s", __func__, esp_err_to_name(res));
+                    }
                 }
             }
         }
@@ -209,7 +218,8 @@ int CoAP_Client_Init()
 void CoAP_Client_Clear()
 {
     ESP_LOGW(TAG_COAP,"fisnish coap client");
-    curGeneralState = Err;
+    if(comState == COMMUNICATION_WIRELESS)
+        curGeneralState = Err;
     if(session){
         coap_session_release(session);
         session = NULL;
@@ -218,7 +228,6 @@ void CoAP_Client_Clear()
         coap_free_context(ctx);
     coap_cleanup();
     coapInitDone = false;
-    is_mesh_connected = false;
 }
 /**
  * @brief send message 

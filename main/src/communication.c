@@ -31,13 +31,13 @@ int ReceiveData()
          ESP_LOGI(TAG_COMM, "received eth");
       }
    }
-   if(amountMeshClients > 0)
+   if(is_mesh_connected)
    {
       if(ReceiveWiFiMesh() == 0){
          ESP_LOGI(TAG_COMM, "received wifi");
       }else
       {
-         ESP_LOGW(TAG_COMM, "tried received wifi but failed");
+         //ESP_LOGW(TAG_COMM, "tried received wifi but failed");
 
       }
    }
@@ -84,11 +84,10 @@ int SendData(char* msg, size_t len)
          if(res < 0)
          {
             ESP_LOGW(TAG_COMM, "send mesh failed");
-
             is_mesh_connected = false;
          }else{
             is_mesh_connected = true;
-            ESP_LOGI(TAG_COMM, "send wifi");
+            ESP_LOGI(TAG_COMM, "send wifi done");
          }
          break;
       default:
@@ -118,7 +117,7 @@ int SendToServer()
    char tmp[LENGTH_IP];
    if(comState == COMMUNICATION_WIRELESS)
    {
-      ESP_LOGI(TAG_COMM, "%s wireless communication", __func__);
+      //ESP_LOGI(TAG_COMM, "%s wireless communication", __func__);
       strcpy(r.mac, mac_wifi);
       uint16_t port = 0;
       if(esp_mesh_is_root())
@@ -142,7 +141,7 @@ int SendToServer()
    }
    else if(comState == COMMUNICATION_WIRED)
    {
-      ESP_LOGI(TAG_COMM, "%s wired communication", __func__);
+      //ESP_LOGI(TAG_COMM, "%s wired communication", __func__);
       strcpy(tmp, ip_eth);
       uint16_t port = TCP_SOCKET_SERVER_PORT;
       strcpy(r.mac, mac_eth);

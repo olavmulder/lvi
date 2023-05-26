@@ -7,7 +7,7 @@
  * 
 ... Met behulp van een datastructuur \textit{strip}, 
     een lijst met de centrale bedieningspanelen als \textit{head} en nodes er achter aan. 
-V - Elke node heeft een lokale- en een \textit{monitoring-strip}. 
+-- Elke node heeft een lokale- en een \textit{monitoring-strip}. 
 Lokale \textit{strips} zorgen voor het bijhouden van de broker en de 
     nodes die er lokaal in de gaten worden gehouden.
 
@@ -49,7 +49,6 @@ strip_t *monitoring_head;
  */
 
 //only for eth implementation!!
-//PSD is done
 void CheckIsServer(Node* node)
 {
     ESP_LOGW(TAG_HEART, "%s server-ip:%s", __func__, node->ip_wifi);
@@ -60,8 +59,15 @@ void CheckIsServer(Node* node)
         //is heartbeat timeout of server
         HandleSendFailure(false);
         //IncrementServerIpCount(eth);
-    }else{
-        ESP_LOGE(TAG_HEART, "%s= not equal, %s != %s ", __func__, node->ip_wifi, SERVER_IP[currentServerIPCount_ETH]);
+    }else if(strcmp(node->ip_wifi, SERVER_IP[currentServerIPCount_WIFI]) == 0)
+    {
+        ESP_LOGE(TAG_HEART, "%s = equal", __func__);
+        //is heartbeat timeout of server
+        HandleSendFailure(true);
+    }
+    else{
+        ESP_LOGE(TAG_HEART, "%s= not equal, %s != (%s || %s) ", __func__, 
+            node->ip_wifi, SERVER_IP[currentServerIPCount_ETH], SERVER_IP[currentServerIPCount_WIFI]);
 
     }
 }
@@ -249,6 +255,7 @@ int SendHeartbeatMesh()
     uint8_t tx_buf[2000];
     //make message
     //ESP_LOGI(TAG_HEART, "%s make msg string", __func__);
+    //ip addr is not set..
     if(MakeMsgStringHeartbeat(tx_buf, monitoring_head) != 0)
     {
         ESP_LOGW(TAG_HEART, "%s make msg string error", __func__);

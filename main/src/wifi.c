@@ -46,28 +46,20 @@ int SendWiFiMeshHeartbeat(uint8_t *tx_buf, size_t  len)
         data_tx.proto = MESH_PROTO_BIN;
         data_tx.tos = MESH_TOS_P2P;
         //get routing table if mesh_parent_addr.addr == addr[i] send 
-        int total_entries;
-        mesh_addr_t routing_table[CONFIG_MESH_ROUTE_TABLE_SIZE];
-        esp_mesh_get_routing_table(&routing_table,CONFIG_MESH_ROUTE_TABLE_SIZE, &total_entries);
-        ESP_LOGI(TAG_WIFI, "%s routing size = %d", __func__, total_entries);
+        //int total_entries;
+        //mesh_addr_t routing_table[CONFIG_MESH_ROUTE_TABLE_SIZE];
+        //esp_mesh_get_routing_table(&routing_table,CONFIG_MESH_ROUTE_TABLE_SIZE, &total_entries);
+        //ESP_LOGI(TAG_WIFI, "%s routing size = %d", __func__, total_entries);
         char a[20];
-        snprintf(a, 20, MACSTR, MAC2STR(mesh_parent_addr.addr));
-        for(uint8_t i = 0; i < total_entries;i++)
-        {
-            char b[20];
-            snprintf(b, 20, MACSTR, MAC2STR(routing_table[i].addr));
-            if(strcmp(b, a) == 0)
-            {
-                ESP_LOGI(TAG_WIFI, "%s mesh_addr == mesh_parent_addr", __func__);
-                res = esp_mesh_send(&mesh_parent_addr, &data_tx, MESH_DATA_P2P, NULL, 0); 
-                if (res != ESP_OK) {
-                    ESP_LOGW(TAG_WIFI, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(res));
-                    return -1;
-                }
-                return res;
-            }
+
+        ESP_LOGI(TAG_WIFI, "%s mesh_addr == mesh_parent_addr", __func__);
+        res = esp_mesh_send(&mesh_parent_addr, &data_tx, MESH_DATA_P2P, NULL, 0); 
+        if (res != ESP_OK) {
+            ESP_LOGW(TAG_WIFI, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(res));
+            return -1;
         }
-        res = -3;
+        return res;
+
     }
     return res;
 }
@@ -107,7 +99,7 @@ int SendWiFiMeshLeaf(uint8_t *tx_buf, size_t  len)
 int SendWiFiMeshRoot(uint8_t *tx_buf, size_t  len)
 {
 //send data to coap server
-    ESP_LOGI(TAG_WIFI, "%s. try send: %s", __func__, tx_buf);
+    //ESP_LOGI(TAG_WIFI, "%s. try send", __func__);
     if(!coapInitDone)  
     { 
       ESP_LOGW(TAG_WIFI, "%s coap not done", __func__);
@@ -266,7 +258,7 @@ int ReceiveWiFiMesh()
     if(strlen((char*)rx_buf) != 0)bufIsFull = true;
     while(bufIsFull)
     {
-        ESP_LOGI(TAG_WIFI, "%s, RECEIVE: %s", __func__, data_rx.data);
+        //ESP_LOGI(TAG_WIFI, "%s, RECEIVE: %s", __func__, data_rx.data);
         r = HandleIncomingCMD(&from, (char*)rx_buf);
         //if it was CMD_HEARTBEAT it is already handled in last function,
         //so return 0
@@ -330,7 +322,7 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG_WIFI, "<MESH_EVENT_CHILD_CONNECTED>aid:%d, "MACSTR"",
                  child_connected->aid,
                  MAC2STR(child_connected->mac));
-        amountMeshClients++;
+        amountMeshClients++;    
     }
     break;
     case MESH_EVENT_CHILD_DISCONNECTED: {

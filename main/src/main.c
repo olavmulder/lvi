@@ -13,24 +13,39 @@
     * 498<alloc>fail, recv ctx, heap:9340, from 30:c6::7:232>up(0, be:0), down(0, be:0), mgmt:0, xon(req:0, rsp:0), bcast:0, wnd(0, parent:00:00:00:00:00:00)
     I (474528) mesh: [RXQ]<max:32 = cfg:32 + extra:0>self:0, <max:32 = cfg:32 + extra:0>tods:0
     :32 = cfg:32 + extra:0>tods:0
-
+    
     probleem:   current server ontvangt heartbeat, volgt toe aan strip
                 current server gaat door, strip blijft werken,
                 ontvangt geen data, want verbroken, timer loopt af,
                 m.b.v sync gaat de status op zwart. Terwijl andere 
                 server gewoon een normale heartbeat ontvangt, er is dus connectie
-    oplossing:   alleen veranderen in changeData wanneer isAlive is false in        
-                    monitoring_head en closeState = -1.
+    oplossing:  alleen veranderen in changeData wanneer isAlive is false in        
+                monitoring_head en closeState = -1.
 
-    -- connectie bij bij 1 server, wordt niet gesynct met andere server. 
+    wat wel werkt en wat niet / functionaliteiten; 
+    -- connectie weg bij 1 server, wordt niet gesynct met andere server. 
     -- connectie weg bij een node, wordt wel gesynct.   
     -- er wordt overgeschakeld wanneer een server zijn connectie met de 
         router verliest.\
     --indien connectie met verbroken server herstelt wordt -> 
         wordt er niet direct gesynct, maar er kan wel weer data heen er
         weer worden verstuurd, maar de kleur op de server die verbroken was
-        wordt weer zwart, omdat er niet naar toe wordt gestuurd.
+        wordt weer zwart, omdat er niet naar toe wordt gestuurd en dus wordt de 
+        timer niet gerestart en dus wordt sync aangeroepen .
     
+    --coap :root to server without; eth, client & sync
+    --coap : root to multi server without: eth & leaf can handle 
+            heartbeat, by setting gen state to black, but take a while to set
+            black on server without any connection.
+    -- coap:
+
+    --after reconnection of wifi, sync doenst work imidetly
+        and the reconnection server will set his own status to black,
+        because the hearbeat message is not send to the reconnected one,
+        so the timer will go off and sets the state to black
+
+    --bij uitvallen van server, wordt er snel naar andere server geswitchted
+        er kan ook weer terug worden geschakeld.
  * TODO:
     Zaterdag:
     1.  Unit test syncalg nog een keer? KAN THUIS!!
@@ -45,31 +60,19 @@
     Zondag & maandag wifi fixen?
     Dinsdag alles testen en test opstelling maken
 
+    testing connection when eth is gone & back again
+    testing hearbteat when eth is gone & when it is back again
+    
+    to fix
+    V send cpy when re(connected)/(startup) on server side.
+        downside: no detecion of not received msg is on otherside
+    -- head_monitor will set state to black after reconnection.
+    -- keep old value, when disconnect, so after reconnection old value can be
+        set
+    -- when node disconnected, not settable
 
-    Wat er werkt(V), Wat niet werkt(X):
-        X --testing heartbeat protocol on wifi(werkt niet)
-        V(2 device), zonder sync & ..., op alle manieren ethernet kabel er uit = 
-            beeld op zwart, ook op gui. 
-            Er kan hersteld worden, door naar andere server te gaan.
-            
-        v(check other server)
-  
-        v programma afsluiten met eth, dan kan er gewisseld worden van server
- -- zrog er voor dat door monitoring list ook werkt voor het herkennen
-    van error.
- --fix het probleem met server in monitoring list
-
- testing connection when eth is gone & back again
- testing hearbteat when eth is gone & when it is back again
-
- - (probably fixed) sync also disconnection msg 
- - sync alg:  if send -1 send again ang again
- local serversion
-
- --because eth adaptor cant check msg has deliverd, switching is difficult
-    --make a return msg, like coap.
  */
-
+#include "unity.h"
 #include "../inc/communication.h"
 //#include "../inc/heartbeat.h"
 #include "../inc/libs/M5Core2.h"
@@ -150,12 +153,12 @@ void app_main()
         //init uart & wifi
         while(UARTInit() != 0)vTaskDelay(50/portTICK_RATE_MS);
         ESP_LOGI(TAG_MAIN, "uart init success");
-        //WiFiInit();
+        WiFiInit();
 
         xTaskCreatePinnedToCore(InitEthernet, "init eth", 4024, NULL, 6, 
-                            NULL, 0);
-        //xTaskCreatePinnedToCore(CoAP_Client_InitTask, "init_coap", 2024, NULL, 6, 
-        //                   NULL, 0);
+                           NULL, 0);
+        xTaskCreatePinnedToCore(CoAP_Client_InitTask, "init_coap", 2024, NULL, 6, 
+                           NULL, 0);
         xTaskCreatePinnedToCore(DisplayTask, "gui_task", 4096, NULL, 3,
                            NULL, 1);
     
@@ -227,7 +230,7 @@ void SetComState()
      * is_eth_connected is updated by the sending over communication wireed
      * is_mesh_connected is updated by disconnection of mesh parent
     */
-   static CommunicationState comStateOld;
+    static CommunicationState comStateOld;
     if(is_eth_connected)
         comState = COMMUNICATION_WIRED;
     else if(is_mesh_connected)
@@ -260,7 +263,8 @@ void SendDataToServerTask()
         int res = SendToServer();
         if(res < 0){
             ESP_LOGW(TAG_MAIN, "SEND TO SERVER; %d", res);
-            if(comState == COMMUNICATION_WIRED)
+
+            /*if(comState == COMMUNICATION_WIRED)
                 HandleSendFailure(true);
             else if(comState == COMMUNICATION_WIRED)
                 HandleSendFailure(false);
@@ -269,7 +273,7 @@ void SendDataToServerTask()
                 {
                     is_mesh_connected = true;
                 }
-            }
+            }*/
             curGeneralState = Err;
         }
 

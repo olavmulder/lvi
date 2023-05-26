@@ -281,13 +281,12 @@ int ReceiveType(int num)
     {
         //ESP_LOGI(TAG_ETH, "%s:received data:%s", __func__, data);
         mesh_data r =  HandleIncomingCMD(NULL, data);
-        if(strcmp(mac_eth, r.mac) == 0)
-        {
+        if(r.cmd == CMD_ERROR)
+            ret = -1;
+        else if(strcmp(mac_eth, r.mac) == 0)
             ret = ReceiveClient(r.cmd, data);
-        }else
-        {   
+        else
             ret = -3;
-        }
     }
     else
     {
@@ -308,15 +307,15 @@ int ReceiveEth()
     int ret =-1, ret2 = -1;
     if( xSemaphoreTake( xSemaphoreEth, ( TickType_t ) 1000 ) == pdTRUE )
     {
-        ret = ReceiveType(0);
-        ret2 = ReceiveType(currentServerIPCount_ETH+1);
+        //ret = ReceiveType(0);
+        ret = ReceiveType(currentServerIPCount_ETH+1);
         xSemaphoreGive(xSemaphoreEth);
     }else
     {
         ESP_LOGE(TAG_ETH, "%s, semaphore taken", __func__);
     }
     //return failure if there was a failure
-    if(ret != -1 || ret2 != -1)ret = -1;
+    //if(ret != -1 || ret2 != -1)ret = -1;
     return ret;
 }
 
@@ -382,7 +381,7 @@ int InitEthernetConnection()
     vTaskDelay(500 / portTICK_RATE_MS);
 
     ESP_LOGI(TAG_ETH, "%s checkETHConnect ip:%s", __func__, ip_eth);
-    gotIPAddress = true;
+   // gotIPAddress = true;
     while(GetMAC() != 0)
     {
         vTaskDelay(2000 / portTICK_RATE_MS);

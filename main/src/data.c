@@ -162,7 +162,7 @@ int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
         if(strlen(string) < 2000)
             snprintf((char*)msg, strlen(string)+1, "%s", string);
     }
-    ESP_LOGI(TAG_DATA, "made heartbead string %s", msg);
+    //ESP_LOGI(TAG_DATA, "made heartbead string %s", msg);
     cJSON_Delete(obj);
     return 0;
     end:
@@ -194,6 +194,7 @@ int MakeServerCountMsg(char* msg, size_t len, uint8_t serverCount, uint8_t serve
     if (dum == NULL)
     {
         ESP_LOGE(TAG_DATA,"Failed to print monitor.\n");
+        return -1;
     } 
     snprintf(msg, len, "%s", dum);
     //ESP_LOGW(TAG_DATA, "msg: %s\n", msg);
@@ -276,6 +277,7 @@ int MakeMsgString(char* msg, mesh_data *r, char *ip, uint16_t *port,
     if (dum == NULL)
     {
         ESP_LOGE(TAG_DATA,"Failed to print monitor.\n");
+        return -1;
     }  
     snprintf(msg, 500, "%s", dum);
     //ESP_LOGW(TAG_DATA, "msg: %s\n", msg);
@@ -306,6 +308,7 @@ mesh_data HandleIncomingCMD(mesh_addr_t *from, char* data)
     cJSON *jsonPort = NULL;
     cJSON *jsonID = NULL;
     cJSON *jsonIP = NULL;
+    
     r.cmd = CMD_ERROR;
     //check if data is json formated
     cJSON *objPtr = cJSON_Parse(data);
