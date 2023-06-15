@@ -63,12 +63,10 @@ int ExtractDataFromMsg(char* msg, mesh_data* r)
     {
         r->temp = jsonTemp->valuedouble;
     }
-    //added
     cJSON_Delete(objPtr);
     return 0;
 
 }
-
 /**
  * @brief make string in cjson format to send as a hearbeat msg
  * add id, cmd, mac to json, and array with all his child, which contains
@@ -162,7 +160,6 @@ int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
         if(strlen(string) < 2000)
             snprintf((char*)msg, strlen(string)+1, "%s", string);
     }
-    //ESP_LOGI(TAG_DATA, "made heartbead string %s", msg);
     cJSON_Delete(obj);
     return 0;
     end:
@@ -197,8 +194,6 @@ int MakeServerCountMsg(char* msg, size_t len, uint8_t serverCount, uint8_t serve
         return -1;
     } 
     snprintf(msg, len, "%s", dum);
-    //ESP_LOGW(TAG_DATA, "msg: %s\n", msg);
-
     free(dum);
     cJSON_Delete(obj);
     return 0;
@@ -223,7 +218,6 @@ int MakeServerCountMsg(char* msg, size_t len, uint8_t serverCount, uint8_t serve
 int MakeMsgString(char* msg, mesh_data *r, char *ip, uint16_t *port,
                     bool gState, bool tState, bool vState)
 {
-
     cJSON *obj = cJSON_CreateObject();
     if (obj == NULL)
     {
@@ -280,7 +274,6 @@ int MakeMsgString(char* msg, mesh_data *r, char *ip, uint16_t *port,
         return -1;
     }  
     snprintf(msg, 500, "%s", dum);
-    //ESP_LOGW(TAG_DATA, "msg: %s\n", msg);
 
     free(dum);
     cJSON_Delete(obj);
@@ -431,9 +424,24 @@ mesh_data HandleIncomingCMD(mesh_addr_t *from, char* data)
             cJSON_Delete(objPtr);
             return r;
         }
-        else if(CMD_ERROR == r.cmd)
+        else if(r.cmd == CMD_ERROR)
         {
             cJSON_Delete(objPtr);
+            return r;
+        }
+        else if(r.cmd == CMD_HEARTBEAT_CONFIRM)
+        {
+            //parent has send data back, so restart timer
+            if(heartbeat_confirm_timer_init == true)
+            {
+                esp_timer_stop(heartbeat_confirm_timer);
+                esp_timer_start_periodic(heartbeat_confirm_timer, HEARTBEAT_INTERVAL_MS_MAX_WAIT * 1000);
+            }
+            return r;
+        }
+        else if(r.cmd == CMD_SET_ERR)
+        {
+            curGeneralState = Err;
             return r;
         }
         else
@@ -442,38 +450,25 @@ mesh_data HandleIncomingCMD(mesh_addr_t *from, char* data)
             jsonID =    cJSON_GetObjectItemCaseSensitive(objPtr, nameID);
             jsonIP =    cJSON_GetObjectItemCaseSensitive(objPtr, nameIP);
             jsonPort =  cJSON_GetObjectItemCaseSensitive(objPtr, namePort);
-            
-            if(jsonMAC == NULL){
-                //ESP_LOGE(TAG_DATA, "mac is null");
-            }else{
+            if(cJSON_IsString(jsonMAC)){
                 strcpy(r.mac, jsonMAC->valuestring);
             }
 
-            if( jsonID == NULL )
+            if(cJSON_IsNumber(jsonID))
             {
-                //ESP_LOGE(TAG_DATA, "id is null");
-            }else{
                 r.id = jsonID->valueint;
             }
-            if(jsonIP == NULL)
+            if(cJSON_IsString(jsonIP))
             {
-                //ESP_LOGE(TAG_DATA, "ip is null");
-            }
-            else{
                 strcpy(r.ip, jsonIP->valuestring);
             }
-
-            if(jsonPort == NULL)
+            if(cJSON_IsNumber(jsonPort))
             {
-                //ESP_LOGE(TAG_DATA, "port is null");
-            }
-            else{
                 r.port = jsonPort->valueint;
             }
             cJSON_Delete(objPtr);
             return r;
         }
-        
     }
     else
     {

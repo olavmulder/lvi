@@ -27,13 +27,14 @@
 #include "lvgl.h"
 #include "driver/i2c.h"
 
-#define ID "2"
+#define ID "4"
 
 //#include "lvgl_helpers.h"
 #define LV_TICK_PERIOD_MS 1
 #define AMOUNT_ETH_CONNECTION_FAILURE 10
 #define LENGTH_IP 20
-
+#define HEARTBEAT_INTERVAL_MS   5000  // Send a heartbeat every 5 seconds
+#define HEARTBEAT_INTERVAL_MS_MAX_WAIT   2*HEARTBEAT_INTERVAL_MS  // Send a heartbeat every 5 seconds
 #define AMOUNT_SERVER_ADDRS 2
 
 typedef enum{
@@ -52,7 +53,7 @@ typedef enum{
 
 typedef enum _CMD{
    CMD_ERROR, CMD_INIT_VALID, CMD_INIT_INVALID, CMD_INIT_SEND,
-   CMD_TO_CLIENT, CMD_TO_SERVER, CMD_HEARTBEAT, CMD_SET_ERR, 
+   CMD_TO_CLIENT, CMD_TO_SERVER, CMD_HEARTBEAT, CMD_HEARTBEAT_CONFIRM, CMD_SET_ERR, 
    CMD_SET_SERVER_NUMBER
 }CMD;
 
@@ -111,6 +112,10 @@ extern volatile bool is_eth_connected;
 extern volatile bool gotIPAddress;
 extern volatile bool heartbeatEnable;
 
+//timer variables
+extern esp_timer_handle_t heartbeat_confirm_timer;
+extern volatile bool heartbeat_confirm_timer_init;
+
 //ip stirngs
 extern esp_ip4_addr_t s_current_ip;
 extern const char *SERVER_IP[AMOUNT_SERVER_ADDRS]; //server ip's,
@@ -121,7 +126,7 @@ extern char mac_wifi[LENGTH_IP];
 
 //hearbeat variables
 extern int8_t currentServerIPCount_ETH;
-extern uint8_t currentServerIPCount_WIFI;
+extern int8_t currentServerIPCount_WIFI;
 
 extern uint8_t serverTimeout;
 
@@ -129,7 +134,6 @@ extern char idName[5];
 
 SemaphoreHandle_t xSemaphoreWiFiMesh;
 SemaphoreHandle_t xSemaphoreCOAP;
-SemaphoreHandle_t xSemaphoreI2C;
 SemaphoreHandle_t xSemaphoreEth;
 SemaphoreHandle_t xGuiSemaphore;
 

@@ -1,39 +1,3 @@
-#include "../inc/heartbeat.h"
-
-/**
- * @brief todo: add ethernet connection check
- * V In het \textit{heartbeat} protocol behoud elke \gls{lvi} connectie met de \textit{host}, 
- * door de info van de \textit{hosts} te kennen. 
- * 
-... Met behulp van een datastructuur \textit{strip}, 
-    een lijst met de centrale bedieningspanelen als \textit{head} en nodes er achter aan. 
--- Elke node heeft een lokale- en een \textit{monitoring-strip}. 
-Lokale \textit{strips} zorgen voor het bijhouden van de broker en de 
-    nodes die er lokaal in de gaten worden gehouden.
-
-De monitoring strips houd bij welke nodes er in de gaten worden gehouden 
-    door de node die lokaal in de gaten worden gehouden.
-
-lijst bijhouden die alle childs bijhoud met hun status als struct
-
-Door een signaal(\textit{heartbeat}) te sturen naar de volgende \textit{node}, 
-    kan er worden ontdekt of die \textit{node} nog werkt.
-
-Echter kan de node zelf aangeven dat de verbinding niet meer werkt in het geval dat de
- conformatie berichten van het CoAP protocol niet meer worden ontvangen, 
-of omdat het aangeeft dat de verbinding is verbroken. 
-Zijn er \textit{nodes} die niet meer te bereiken zijn, dan moet dit worden aangegeven bij het centrale bedieningspaneel, om vervolgens over te stappen op een draadloos netwerk. Als uit het \textit{heartbeat} protocol blijkt dat alle \textit{nodes} de centrale bedieningspositie niet kunnen bereiken, kan er over worden gestapt naar een andere centrale bedieningspositie. Op deze manier kan er dus worden aangepast op fouten.
- */
-/**
- * Note: eth heartbeat via servers
- *       wifi heartbeat via nodes.
-*/
-const char* TAG_HEART = "Heartbeat";
-static int timeoutID = -1;
-static SemaphoreHandle_t xSemaphoreTimeoutID;
-uint8_t serverTimeout = 0;
-strip_t *monitoring_head;
-
 /**
  * hearthbeat fault detection protocol. 5 seconds timer
  *  - if root cannot send to COAP multiple times -> try other server -> also fail next (circulair)
@@ -44,11 +8,114 @@ strip_t *monitoring_head;
  *      -if hardware isn't there switch to wifi
  * - Every device sends CMD_HEARTBEAT to his parents(up in mesh netwerk)
  * - A parent keeps tracking of receiving messages of his childs, if not received in time
- *      send status of that child to centraal bedienings paneel 
+ *      send status of that child to 'centraal bedieningspaneel'
  *
  */
+#include "../inc/heartbeat.h"
 
-//only for eth implementation!!
+const char* TAG_HEART = "Heartbeat";
+
+uint8_t serverTimeout = 0;
+strip_t *monitoring_head;
+volatile bool heartbeat_confirm_timer_init = false;
+esp_timer_handle_t heartbeat_confirm_timer;
+
+/**
+ * @brief on send failure to server, amount is incrementet
+ * if higher dan max send_failure, go to next server ip .
+ * @param type false = eth, true = wifi
+ */
+void _HandleServerFailure(bool type)
+{
+    static uint8_t amount;
+    amount++;
+    if(amount > MAX_SEND_FAILURE)
+    {
+        amount = 0;
+        IncrementServerIpCount(type);
+    }
+    ESP_LOGW(TAG_HEART, "%s; set curGeneralState = Err", __func__);
+    curGeneralState = Err;
+}
+//init timer, is called in hearbeatstart
+void TimerHBConfirmInit()
+{
+    if(heartbeat_confirm_timer_init == false)
+    {
+        esp_timer_create_args_t hb_confirm_timer_args = {
+            .callback = &TimerHBConfirmCallback,
+            .arg = NULL,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "timer_hb_confirm",
+        };
+        ESP_ERROR_CHECK(esp_timer_create(&hb_confirm_timer_args, &heartbeat_confirm_timer));
+        ESP_ERROR_CHECK(
+        esp_timer_start_periodic(heartbeat_confirm_timer, HEARTBEAT_INTERVAL_MS_MAX_WAIT * 1000));
+        heartbeat_confirm_timer_init = true;
+    }
+}
+/**
+ * @brief if hb_confirm timer goes off, no reaction from server than
+ *  set curGeneralState on Err
+ * and send a set Err message to all my childs in monitoring list
+ */
+void TimerHBConfirmCallback()
+{
+    //if not received confirm in time = state is black when on WiFi
+    //make error message to all childs in monitoring list.
+
+    if(is_mesh_connected && comState == COMMUNICATION_WIRELESS)
+    {   
+        mesh_data r = {
+            .id = atoi(idName),
+            .cmd = CMD_SET_ERR 
+        };
+        ESP_LOGW(TAG_HEART, "timer hb configrm set errr");
+        memcpy(r.mac, mac_wifi, sizeof(r.mac));
+        char msg[50];
+        MakeMsgString(msg, &r, NULL, NULL, false, false, false);
+        //if(!esp_mesh_is_root())
+        //{
+            //get all mesh address from childs, stored in monitoring_head
+            mesh_addr_t mesh_leaf[monitoring_head->lenChildArr];
+            size_t len = monitoring_head->lenChildArr;
+            for(uint8_t i = 0; i < len;i++)
+            {
+                mesh_data r;
+                memcpy(r.ip, monitoring_head->childArr[i]->ip_wifi, sizeof(r.ip));
+                memcpy(r.mac, monitoring_head->childArr[i]->mac_wifi, sizeof(r.mac));
+                r.port = monitoring_head->childArr[i]->port;
+                _GetMeshAddr(&r, &mesh_leaf[i]);
+            }
+            //send to all childs
+            mesh_data_t data_tx;
+            data_tx.data = (uint8_t*)msg;
+            data_tx.size = strlen(msg);
+            data_tx.proto = MESH_PROTO_BIN;
+            data_tx.tos = MESH_TOS_P2P;
+            for(uint8_t i  = 0; i < len; i++)
+            {
+                int ret = esp_mesh_send(&mesh_leaf[i], &data_tx, MESH_DATA_P2P, NULL, 0); 
+                if (ret != ESP_OK) {
+                    ESP_LOGW(TAG_HEART, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(ret));
+                }
+            }
+            //memset(data_tx)
+        /*}
+        else
+        {
+            //send to coap server
+            CoAP_Client_Send(msg, strlen(msg));
+        }*/
+    }
+    //restart timer
+
+    _HandleServerFailure( ((comState == COMMUNICATION_WIRED) ? false : true) );
+    esp_timer_stop(heartbeat_confirm_timer);
+    esp_timer_start_periodic(heartbeat_confirm_timer, HEARTBEAT_INTERVAL_MS_MAX_WAIT * 1000);
+}
+
+
 void CheckIsServer(Node* node)
 {
     ESP_LOGW(TAG_HEART, "%s server-ip:%s", __func__, node->ip_wifi);
@@ -57,18 +124,16 @@ void CheckIsServer(Node* node)
         ESP_LOGE(TAG_HEART, "%s = equal", __func__);
 
         //is heartbeat timeout of server
-        HandleSendFailure(false);
-        //IncrementServerIpCount(eth);
+        _HandleServerFailure(false);
     }else if(strcmp(node->ip_wifi, SERVER_IP[currentServerIPCount_WIFI]) == 0)
     {
         ESP_LOGE(TAG_HEART, "%s = equal", __func__);
         //is heartbeat timeout of server
-        HandleSendFailure(true);
+        _HandleServerFailure(true);
     }
     else{
         ESP_LOGE(TAG_HEART, "%s= not equal, %s != (%s || %s) ", __func__, 
             node->ip_wifi, SERVER_IP[currentServerIPCount_ETH], SERVER_IP[currentServerIPCount_WIFI]);
-
     }
 }
 /**
@@ -77,7 +142,6 @@ void CheckIsServer(Node* node)
  * @param id which is timed out
  * @return int -3, not found, -2 on not inited
  */
-//PSD done, but check ->id row 92 & ->isAlive row 95
 int FindTimedOutID(int id)
 {
     ESP_LOGW(TAG_HEART, "timeout != -1 send message to central panal for id %d", id);
@@ -99,30 +163,7 @@ int FindTimedOutID(int id)
     }
     return -3;
 }
-/**
- * @brief task that contiuesly checks if a timeoutID has arrived
- * so that the timer interrupt is as small as possible
- */
-void TimeoutTask()
-{
-    while(1)
-    {
-        int tempId = -1;
-        if(timeoutID != -1)
-        {
-            if( xSemaphoreTake( xSemaphoreTimeoutID, ( TickType_t ) 10 ) == pdTRUE )
-            {   
-                tempId = timeoutID;
-                timeoutID = -1;
-                xSemaphoreGive(xSemaphoreTimeoutID);
-            }
-            FindTimedOutID(tempId);
-        }
-        vTaskDelay(100/portTICK_RATE_MS);
-    }
-    vTaskDelete(NULL);
 
-}
 /**
  * @brief funcion is called when timer goes off, set timoutId so timeOuttask
  * can handle it
@@ -133,11 +174,7 @@ void TimerCallback(void *id)
 {
     Node*temp = id;
     ESP_LOGI(TAG_HEART, "timer call back for id %d",temp->id);
-    if( xSemaphoreTake( xSemaphoreTimeoutID, ( TickType_t ) 10 ) == pdTRUE )
-    {
-        timeoutID = temp->id;
-        xSemaphoreGive(xSemaphoreTimeoutID);
-    }
+    FindTimedOutID(temp->id);
 }
 /**
  * @brief init timer&start it
@@ -163,13 +200,13 @@ void InitTimer(Node* node)
  * @param id 
  * @param isAlive 
  */
-void SetAlive(uint8_t id, bool isAlive)
+void SetAlive(strip_t *strip, uint8_t id, bool isAlive)
 {
-    for(uint8_t i = 0; i < monitoring_head->lenChildArr;i++)
+    for(uint8_t i = 0; i < strip->lenChildArr;i++)
     {
-        if(monitoring_head->childArr[i]->id == id)
+        if(strip->childArr[i]->id == id)
         {
-            monitoring_head->childArr[i]->isAlive = isAlive;
+            strip->childArr[i]->isAlive = isAlive;
         }
     }
 }
@@ -179,36 +216,30 @@ void SetAlive(uint8_t id, bool isAlive)
  *  if not found add id to list 
  * @param id int
  */
-//PSD done, only add isaive row 210
 void HeartbeatHandler(uint8_t id, strip_t* childsStrip)
 {
-    ESP_LOGI(TAG_HEART, "%s id: %d len: %d", __func__, id, childsStrip->lenChildArr);
+    //ESP_LOGI(TAG_HEART, "%s id: %d len: %d", __func__, id, childsStrip->lenChildArr);
     //add all nodes from this child to own monitoring head
     //AddNodeToStrip checkt if id is already present
     for(uint8_t i = 0; i < childsStrip->lenChildArr; i++)
     {
         monitoring_head = AddNodeToStrip(monitoring_head, childsStrip->childArr[i]);
-    }
-    //ESP_LOGI(TAG_HEART, "%s, added anything", __func__);
-    
+    }    
     //if not empty search node in strip
     for(uint8_t i = 0;i < monitoring_head->lenChildArr; i++)
     {
         //if found restart timer and return
         if(monitoring_head->childArr[i]->id == id)
         {
-            ESP_LOGI(TAG_HEART, "hb handler: restart timer of id %d", monitoring_head->childArr[i]->id);
+            //ESP_LOGI(TAG_HEART, "hb handler: restart timer of id %d", monitoring_head->childArr[i]->id);
             if(esp_timer_is_active(monitoring_head->childArr[i]->periodic_timer))
             {
                 ESP_ERROR_CHECK(esp_timer_stop(monitoring_head->childArr[i]->periodic_timer));
                 ESP_ERROR_CHECK(esp_timer_start_periodic(monitoring_head->childArr[i]->periodic_timer, 
                     HEARTBEAT_INTERVAL_MS_MAX_WAIT * 1000));
             }
-            //SetAlive(id, true);
             monitoring_head->childArr[i]->isAlive = true;
-
-            ESP_LOGI(TAG_HEART, "%s timer started", __func__);
-
+            //ESP_LOGI(TAG_HEART, "%s timer started", __func__);
         }
     }
     //debug
@@ -222,7 +253,6 @@ void HeartbeatHandler(uint8_t id, strip_t* childsStrip)
  */
 int SendHeartbeatWired()
 {
-    //ESP_LOGI(TAG_HEART, "send wired heartbeat");
     //set data
     mesh_data data;
     data.id = atoi(idName);
@@ -254,14 +284,11 @@ int SendHeartbeatMesh()
 {
     uint8_t tx_buf[2000];
     //make message
-    //ESP_LOGI(TAG_HEART, "%s make msg string", __func__);
-    //ip addr is not set..
     if(MakeMsgStringHeartbeat(tx_buf, monitoring_head) != 0)
     {
         ESP_LOGW(TAG_HEART, "%s make msg string error", __func__);
         return -1;
     }
-    //ESP_LOGI(TAG_HEART, "%s; msg: %s", __func__, tx_buf);
     int res =  SendWiFiMeshHeartbeat(tx_buf, strlen((char*)tx_buf));
     return res;
 }
@@ -274,9 +301,7 @@ int SendHeartbeatMesh()
 int SendHeartbeat()
 {
     int res = -1;
-    /*if(!initSuccessfull)
-        res = -2
-    else*/ if(comState == COMMUNICATION_WIRELESS)
+    if(comState == COMMUNICATION_WIRELESS)
     {
         res = SendHeartbeatMesh();
         ESP_LOGI(TAG_HEART, "%s: send wifi mesh heart: %d", __func__, res);
@@ -298,37 +323,24 @@ int SendHeartbeat()
  * @brief task that sends hearbeat message very HEATBEAT_INTERVAL_MS/1000 sec.
  * 
  */
-//PSD done
-void StartHeartbeat()
+strip_t* StartHeartbeat(strip_t *strip)
 {
     //make task that runs and check if a id is timed out from the heatbeat timer
     ESP_LOGI(TAG_HEART, "begin %s", __func__);
-    xSemaphoreTimeoutID = xSemaphoreCreateMutex();
-    monitoring_head = malloc(sizeof(strip_t));
-    monitoring_head->childArr =(Node**)malloc(sizeof(Node*));
-    monitoring_head->childArr[0] =(Node*)malloc(sizeof(Node));
-    //set data of monitoring_head 0 = own data
-    /*monitoring_head->childArr[0]->id = atoi(idName);
-    strcpy(monitoring_head->childArr[0]->mac_wifi, mac_wifi);
-    strcpy(monitoring_head->childArr[0]->ip_wifi, "\0");
-    monitoring_head->childArr[0]->port = 0;*/
+    strip = malloc(sizeof(strip_t));
+    strip->childArr =(Node**)malloc(sizeof(Node*));
+    strip->childArr[0] =(Node*)malloc(sizeof(Node));
 
-    monitoring_head->lenChildArr = 0;
-    if( xSemaphoreTimeoutID != NULL)
-    {
-        xTaskCreatePinnedToCore(TimeoutTask, "timeout_heartbeat_task", 2048, NULL, 4,
-                NULL, 1);
-    }
+    strip->lenChildArr = 0;
+    TimerHBConfirmInit();
+    return strip;
 }
-
-
 /**
  * @brief increment server ip count & send current counter to all devices
  * in network, to let them know
  * 
  * @param type true = wifi, false = eth
  */
-//PSD done
 int IncrementServerIpCount(bool type)
 {
     if(type)//wifi =1
@@ -338,8 +350,6 @@ int IncrementServerIpCount(bool type)
         {
             currentServerIPCount_WIFI = 0;
         }
-
-        //return SendServerCountToNodes(currentServerIPCount_WIFI, 1);
     }
     else //eth =0
     {
@@ -349,29 +359,11 @@ int IncrementServerIpCount(bool type)
             currentServerIPCount_ETH = 0;
         }
         ESP_LOGW(TAG_HEART, "%s; currentServerIPCount = %d", __func__, currentServerIPCount_ETH);
-        //return SendServerCountToNodes(currentServerIPCount_ETH, 0);
     }
     return 0;
 }
-/**
- * @brief on send failure to server, amount is incrementet
- * if higher dan max send_failure, go to next server ip .
- * @param type false = eth, true = wifi
- */
-//psd done
-void HandleSendFailure(bool type)
-{
-    static uint8_t amount;
-    amount++;
-    if(amount > MAX_SEND_FAILURE)
-    {
-        amount = 0;
-        IncrementServerIpCount(type);
-    }
-    curGeneralState = Err;
-}        //send broadcast to evry node in network,
-        //to increment currentServerIPCount_ETH
 
+/*
 int SendServerCountToNodes(uint8_t serverCount, uint8_t type)
 {
     int res;
@@ -397,3 +389,4 @@ int SendServerCountToNodes(uint8_t serverCount, uint8_t type)
     return res;
 }
 
+*/

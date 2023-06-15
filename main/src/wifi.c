@@ -29,37 +29,30 @@ int SendWiFiMeshHeartbeat(uint8_t *tx_buf, size_t  len)
     int res = -1;
     if(esp_mesh_is_root())
     {
+        
         res = SendWiFiMeshRoot(tx_buf, len);
         if(res < 0)
         {
             ESP_LOGW(TAG_WIFI, "%s; send wifi mesh root error %d", __func__, res);
         }
-        //ESP_LOGI(TAG_WIFI, "heartbeat send root %s",(char*)tx_buf);
     }
     else
     {
-        if(!is_mesh_connected)return -2;
+        //if(!is_mesh_connected)return -2;
         //set mesh_data_t parameters to send to parent
         mesh_data_t data_tx;
         data_tx.data = tx_buf;
         data_tx.size = len;
         data_tx.proto = MESH_PROTO_BIN;
         data_tx.tos = MESH_TOS_P2P;
-        //get routing table if mesh_parent_addr.addr == addr[i] send 
-        //int total_entries;
-        //mesh_addr_t routing_table[CONFIG_MESH_ROUTE_TABLE_SIZE];
-        //esp_mesh_get_routing_table(&routing_table,CONFIG_MESH_ROUTE_TABLE_SIZE, &total_entries);
-        //ESP_LOGI(TAG_WIFI, "%s routing size = %d", __func__, total_entries);
-        char a[20];
-
-        ESP_LOGI(TAG_WIFI, "%s mesh_addr == mesh_parent_addr", __func__);
-        res = esp_mesh_send(&mesh_parent_addr, &data_tx, MESH_DATA_P2P, NULL, 0); 
+        /*mesh_addr_t broadcast_group_id = {
+            .addr = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}    // Working
+        };*/
+        res = esp_mesh_send(&mesh_parent_addr, &data_tx, MESH_DATA_P2P, NULL, 0); //1
         if (res != ESP_OK) {
             ESP_LOGW(TAG_WIFI, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(res));
             return -1;
         }
-        return res;
-
     }
     return res;
 }
@@ -85,9 +78,7 @@ int SendWiFiMeshLeaf(uint8_t *tx_buf, size_t  len)
         ESP_LOGW(TAG_WIFI, "%s Error esp_mesh_send %s", __func__, esp_err_to_name(ret));
         return -1;
     }
-    //ESP_LOGI(TAG_WIFI, "leaf send mesh %s",(char*)tx_buf);
     return 0;
-
 }
 /**
  * @brief send msg over coap, call again on return -2
@@ -99,7 +90,6 @@ int SendWiFiMeshLeaf(uint8_t *tx_buf, size_t  len)
 int SendWiFiMeshRoot(uint8_t *tx_buf, size_t  len)
 {
 //send data to coap server
-    //ESP_LOGI(TAG_WIFI, "%s. try send", __func__);
     if(!coapInitDone)  
     { 
       ESP_LOGW(TAG_WIFI, "%s coap not done", __func__);
@@ -111,11 +101,10 @@ int SendWiFiMeshRoot(uint8_t *tx_buf, size_t  len)
     if (ret < 0)
     {
         //failure so try later next server
-        IncrementServerIpCount(true);
-        ESP_LOGW(TAG_WIFI, "cient send went %d", ret);
-        CoAP_Client_Init();
-        return -1;
-
+        //IncrementServerIpCount(true);
+        //ESP_LOGW(TAG_WIFI, "cient send went %d", ret);
+       // CoAP_Client_Init();
+        //return -1;
     }
     return 0;
 }
@@ -207,10 +196,8 @@ int ReceiveWiFiMeshRoot(mesh_addr_t *from, mesh_data *r, uint8_t* data)
     {
         char ip[LENGTH_IP];
         snprintf(ip, LENGTH_IP,IPSTR, IP2STR(&from->mip.ip4));
-        //ESP_LOGI(TAG_WIFI,"\nrx root%s", (char*)data);
         uint16_t port = from->mip.port;
         //only add temperature, because server only needs temp
-        
         if(HandleIncomingData((char*)data, &r->temp) != 0)
         {
             ESP_LOGW(TAG_WIFI,"handle incoming data error");
@@ -223,12 +210,6 @@ int ReceiveWiFiMeshRoot(mesh_addr_t *from, mesh_data *r, uint8_t* data)
             return -1;
         }
         return SendWiFiMeshRoot((uint8_t*)buf, strlen(buf));   
-        /*if(res == 2)
-        {
-            do{
-                res = SendWiFiMeshRoot((uint8_t*)buf, strlen(buf));
-            }while(res == 2);
-        }*/
     }
     return -3;
 
@@ -252,13 +233,12 @@ int ReceiveWiFiMesh()
     int res = -1;
     bool bufIsFull=false;
     mesh_data r;
-    //portMAX_DELAY
+    //not portMAX_DELAY, because eth has also to be checked in this task
     esp_mesh_recv(&from, &data_rx, 0, &flag, NULL, 0); 
     //set buffer is full if received data
     if(strlen((char*)rx_buf) != 0)bufIsFull = true;
     while(bufIsFull)
     {
-        //ESP_LOGI(TAG_WIFI, "%s, RECEIVE: %s", __func__, data_rx.data);
         r = HandleIncomingCMD(&from, (char*)rx_buf);
         //if it was CMD_HEARTBEAT it is already handled in last function,
         //so return 0
@@ -306,14 +286,12 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
     case MESH_EVENT_STARTED: {
         esp_mesh_get_id(&id);
         ESP_LOGI(TAG_WIFI, "<MESH_EVENT_MESH_STARTED>ID:"MACSTR"", MAC2STR(id.addr));
-        //is_mesh_connected = false;
         mesh_layer = esp_mesh_get_layer();
 
     }
     break;
     case MESH_EVENT_STOPPED: {
         ESP_LOGI(TAG_WIFI, "<MESH_EVENT_STOPPED>");
-        //is_mesh_connected = false;
         mesh_layer = esp_mesh_get_layer();
     }
     break;
@@ -354,7 +332,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG_WIFI, "<MESH_EVENT_NO_PARENT_FOUND>scan times:%d",
                  no_parent->scan_times);
     }
-    /* TODO handler for the failure */
     break;
     case MESH_EVENT_PARENT_CONNECTED: {
         mesh_event_connected_t *connected = (mesh_event_connected_t *)event_data;
@@ -381,8 +358,8 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  disconnected->reason);
         
         is_mesh_connected = false;
-        if(comState == COMMUNICATION_WIRELESS)
-            curGeneralState = Err;
+        //if(comState == COMMUNICATION_WIRELESS)
+        //    curGeneralState = Err;
         mesh_layer = esp_mesh_get_layer();
     }
     break;
@@ -508,7 +485,7 @@ void ip_event_handler(void *arg, esp_event_base_t event_base,
     snprintf(ip_wifi, LENGTH_IP, IPSTR, IP2STR(&event->ip_info.ip));
     s_current_ip.addr = event->ip_info.ip.addr;
     gotIPAddress = true;
-    CoAP_Client_Init();//)vTaskDelay(100);
+    CoAP_Client_Init();
 }
 /**
  * @brief wifi init, call it only once

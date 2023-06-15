@@ -1,14 +1,3 @@
-/* Mesh IP Internal Networking Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-#include "../inc/coap.h"
-
-
 /* CoAP server Example
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
@@ -17,6 +6,7 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
+#include "../inc/coap.h"
 
 const char *TAG_COAP = "CoAP_server";
 volatile bool coapInitDone = false;
@@ -72,8 +62,6 @@ static void message_handler(coap_session_t*s,
                             const coap_pdu_t *received,
                             const coap_mid_t mid)
 {
-        //ESP_LOGI(TAG_COAP, "%s", __func__);
-
         size_t len;
         const uint8_t* data;
         char* inData = NULL;
@@ -99,8 +87,6 @@ static void message_handler(coap_session_t*s,
             //check if it was our msg
             if(strcmp(mac_wifi, r.mac) == 0)
             {
-                //ESP_LOGI(TAG_COAP, "%s, mac_wifi & inc mac equal", __func__);
-                //
                 if(ReceiveClient(r.cmd, inData)< 0)
                 {
                     ESP_LOGW(TAG_COAP, "%s, client receive", __func__);
@@ -127,7 +113,6 @@ static void message_handler(coap_session_t*s,
                     mesh_data_t data_temp;
                     data_temp.data = (uint8_t*)msg;
                     data_temp.size = sizeof(msg);
-                    //ESP_LOGI(TAG_COAP, "%s: esp_mesh_send: %s", __func__, data_temp.data);
                     data_temp.proto = MESH_PROTO_BIN;
                     data_temp.tos = MESH_TOS_P2P;
                     int res = esp_mesh_send(&mesh_leaf, &data_temp, 
@@ -144,7 +129,6 @@ static void message_handler(coap_session_t*s,
         }
         end:
             have_response = 1;
-            //ESP_LOGW(TAG_COAP, "have response = 1");
             if(inData != NULL)
                 free(inData);
 }
@@ -167,14 +151,7 @@ int CoAP_Client_Init()
     /* Set logging level */
     coap_set_log_level(LOG_WARNING);
     if(!coapInitDone){
-        //ESP_LOGI(TAG_COAP, "GOT ip address");
-        /* resolve destination address where server should be sent */
-        /*if(currentServerIPCount > 2)
-        {
-            ESP_LOGE(TAG_COAP,"currentServerIPCount is to big: %d", currentServerIPCount);
-            currentServerIPCount = 0;
-            return -1;
-        }*/        
+       
         if (Resolve_address(SERVER_IP[currentServerIPCount_WIFI], "5683", &dst) < 0) {
             ESP_LOGE(TAG_COAP,  "failed to resolve address\n");
             CoAP_Client_Clear();
@@ -218,8 +195,8 @@ int CoAP_Client_Init()
 void CoAP_Client_Clear()
 {
     ESP_LOGW(TAG_COAP,"fisnish coap client");
-    if(comState == COMMUNICATION_WIRELESS)
-        curGeneralState = Err;
+    //if(comState == COMMUNICATION_WIRELESS)
+    //    curGeneralState = Err;
     if(session){
         coap_session_release(session);
         session = NULL;
@@ -276,14 +253,12 @@ int CoAP_Client_Send(char* msg, size_t len)
             else
                 return -5;
             //if there is no response in 5 second time, init again...
-            //timer_get_counter_time_sec(TIMER_GROUP_0, TIMER_0, &time);
             vTaskDelay(50 / portTICK_RATE_MS);
             time++;
             if(time > (5000 /50)){
                 ESP_LOGW(TAG_COAP, "timer went off");
                 CoAP_Client_Clear();
                 have_response = 0;
-                //serverTimeout++;
                 return -1;
             }
     }

@@ -104,7 +104,7 @@ typedef struct _buffer_t{
     size_t size;
     size_t capacity;
 }buffer_t;
-//added
+
 buffer_t* _HandleUARTBuffer(buffer_t* buffer, int len, uint8_t* temp_buf)
 {
     if(buffer->size + len > buffer->capacity)
@@ -118,6 +118,7 @@ buffer_t* _HandleUARTBuffer(buffer_t* buffer, int len, uint8_t* temp_buf)
     buffer->size +=len; 
     return buffer;
 }
+//wait till return message
 char* waitMsg(unsigned long time)
 {
 
@@ -150,7 +151,6 @@ int UART_SendData(const char* msg)
 {
     const int len = strlen(msg);
     const int txBytes = uart_write_bytes(UART_PORT_NUM, msg , len);
-    //ESP_LOGI(TAG_ETH, "wrote %d bytes", txBytes);
     return txBytes;
 }
 /**
@@ -165,7 +165,6 @@ int UART_GetReturnValue(unsigned long waitTime, const char* msgToFilterOn, const
 {
     char* res = waitMsg(waitTime);
     int ret = -1;
-    //ESP_LOGI(TAG_ETH, "rs: %s", res);
     char *pos;
     if(msgToFilterOn2 != NULL)
     {
@@ -178,7 +177,6 @@ int UART_GetReturnValue(unsigned long waitTime, const char* msgToFilterOn, const
     pos = strstr(res, msgToFilterOn);
     if(pos != NULL)
     {
-        //ESP_LOGI(TAG_ETH, "%s return", msgToFilterOn);
         ret = 0;
     }else{
         ESP_LOGW(TAG_ETH, "not found %s", msgToFilterOn);
@@ -202,19 +200,17 @@ int ReceiveTCPData(char* data, size_t amountMaxRead, int num)
     char buf[30];
     int ret = -1;
     snprintf(buf, 30, "%s%d,%d\r\n", msg1, num, amountMaxRead);
-    //ESP_LOGI(TAG_ETH, "%s: buf: %s", __func__, buf);
     UART_SendData(buf);
     char* res = waitMsg(500);
     if(res != NULL)
     {
-        //ESP_LOGI(TAG_ETH, "%s: res: %s", __func__, res);
         //check error
         char *pos;
         pos = strstr(res, "+CIPRECVDATA:");
         char bufRes[10];
         if(pos != NULL)
         {
-            pos+=strlen("+CIPRECVDATA:");//14;
+            pos+=strlen("+CIPRECVDATA:");
             int i = 0;
             while(*pos != ',')
             {
@@ -231,7 +227,6 @@ int ReceiveTCPData(char* data, size_t amountMaxRead, int num)
             size_t actual_read;
             sscanf(bufRes, "%d", &actual_read); 
             memcpy(data, ++pos, actual_read);
-            //ESP_LOGI(TAG_ETH, "%s becomes: actual read size:%d", bufRes, actual_read);        
             ret = 0;
         }else{
             ret = -1;
@@ -253,18 +248,11 @@ int SendTCPData(char* buffer, size_t size, int num) {
     const char* msg1 = "AT+CIPSEND=";
     char buf[20];
     snprintf(buf, 20, "%s%d,%d\r\n", msg1,num,size);
-    //ESP_LOGI(TAG_ETH, "%s: buf: %s", __func__, buf);
-    //TODO: semaphore 
     UART_SendData(buf);
-    //sendCMD("AT+CIPSEND=" + char*(size) + "");
     vTaskDelay(500/portTICK_RATE_MS);
-    //delay(500);
     UART_SendData(buffer);
     UART_SendData("\r\n");
-    //receive data, if error gencurGeneralState = Err
-    return UART_GetReturnValue(500, "SEND OK", "ERROR" );
-    //start task 
-   
+    return UART_GetReturnValue(500, "SEND OK", "ERROR" );   
 }
 /**
  * @brief 
@@ -279,7 +267,6 @@ int ReceiveType(int num)
     char data[amountMaxRead];
     if(ReceiveTCPData(data, amountMaxRead, num) == 0)
     {
-        //ESP_LOGI(TAG_ETH, "%s:received data:%s", __func__, data);
         mesh_data r =  HandleIncomingCMD(NULL, data);
         if(r.cmd == CMD_ERROR)
             ret = -1;
@@ -307,15 +294,12 @@ int ReceiveEth()
     int ret =-1, ret2 = -1;
     if( xSemaphoreTake( xSemaphoreEth, ( TickType_t ) 1000 ) == pdTRUE )
     {
-        //ret = ReceiveType(0);
         ret = ReceiveType(currentServerIPCount_ETH+1);
         xSemaphoreGive(xSemaphoreEth);
     }else
     {
         ESP_LOGE(TAG_ETH, "%s, semaphore taken", __func__);
     }
-    //return failure if there was a failure
-    //if(ret != -1 || ret2 != -1)ret = -1;
     return ret;
 }
 
@@ -347,11 +331,6 @@ int UARTInit()
         uart_driver_install(UART_PORT_NUM, 1024*2, 0, 0,NULL , 0); //&uart2_queue
     uart_param_config(UART_PORT_NUM, &uart_config);
     uart_set_pin(UART_PORT_NUM, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-        //uart_driver_install(UART_PORT_NUM, 1024*2, 1024*2, 0, NULL, 0);
-    //Create a task to handler UART event from ISR
-    //uart_enable_pattern_det_baud_intr(UART_PORT_NUM, '+', PATTERN_CHR_NUM, 9, 0, 0);
-    //Reset the pattern queue length to record at most 20 pattern positions.
-    //uart_pattern_queue_reset(UART_PORT_NUM, 20);
     return 0;
 }
 /**
@@ -368,7 +347,6 @@ int InitEthernetConnection()
     
     while(CheckDeviceConnect() != 0)
     {
-        //ESP_LOGE(TAG_ETH, "%s checkDeviceConnect failed", __func__);
         vTaskDelay(2000 / portTICK_RATE_MS);
     }
     vTaskDelay(500 / portTICK_RATE_MS);
@@ -376,16 +354,13 @@ int InitEthernetConnection()
     while(CheckETHConnect() != 0)
     {
         vTaskDelay(2000 / portTICK_RATE_MS);
-        //ESP_LOGE(TAG_ETH, "%s checkETHConnect():-1", __func__ );
     }
     vTaskDelay(500 / portTICK_RATE_MS);
 
     ESP_LOGI(TAG_ETH, "%s checkETHConnect ip:%s", __func__, ip_eth);
-   // gotIPAddress = true;
     while(GetMAC() != 0)
     {
         vTaskDelay(2000 / portTICK_RATE_MS);
-        //ESP_LOGE(TAG_ETH, "GetMAC failed");
     }
     vTaskDelay(500 / portTICK_RATE_MS);
 
@@ -393,20 +368,7 @@ int InitEthernetConnection()
     while(SetMultiConnection() != 0)
     {
         vTaskDelay(2000 / portTICK_RATE_MS);
-        //ESP_LOGE(TAG_ETH, "SetMultiConnection failed");
     }
-    /*while(CreateTCPClient("255.255.255.255", TCP_SOCKET_SERVER_PORT, 0) != 0)
-    {
-        vTaskDelay(2000 / portTICK_RATE_MS);
-        static int amount;
-        amount ++;
-        if(amount > 3)
-        {
-            IncrementServerIpCount(false);
-            amount = 0;
-        }
-        ESP_LOGE(TAG_ETH, "%s createTCPClient() error curr %d", __func__ , currentServerIPCount_ETH);
-    }*/
     while(CreateTCPClient(SERVER_IP[currentServerIPCount_ETH], TCP_SOCKET_SERVER_PORT, currentServerIPCount_ETH+1) != 0)
     {
         vTaskDelay(2000 / portTICK_RATE_MS);
@@ -417,7 +379,6 @@ int InitEthernetConnection()
             IncrementServerIpCount(false);
             amount = 0;
         }
-        //ESP_LOGE(TAG_ETH, "%s createTCPClient(%s) error curr %d", __func__ ,SERVER_IP[currentServerIPCount_ETH], currentServerIPCount_ETH);
     }
     vTaskDelay(500 / portTICK_RATE_MS);
     ESP_LOGI(TAG_ETH, "createTCPClient: 0");
@@ -434,14 +395,11 @@ int InitEthernetConnection()
 int CheckDeviceConnect() {
     //connection device
     const char* msg1 = "AT\r\n";
-    //ESP_ERROR_CHECK(uart_flush_input(UART_PORT_NUM));
     if(UART_SendData(msg1) <= 0)
     {
         ESP_LOGW(TAG_ETH, "WRITE <= 0 byets");
         return -1;
     }
-    //ESP_ERROR_CHECK(uart_wait_tx_done(UART_PORT_NUM, (portTickType)portMAX_DELAY));
-
     return UART_GetReturnValue(500, "OK", NULL);
 }
 
@@ -456,7 +414,6 @@ int CheckETHConnect() {
         ESP_LOGW(TAG_ETH, "WRITE <= 0 bytes");
     }
     char* res = waitMsg(1000);
-    //ESP_LOGI(TAG_ETH, "%s,res: %s",__func__, res);
     
     pos = strstr(res, "192");
 
@@ -537,23 +494,22 @@ int SetMultiConnection()
     res = UART_GetReturnValue(1000, "OK", NULL);
     return res;
 }
+
 /*! @brief Create a TCP client
     @return True if create successfully, false otherwise. */
 int CreateTCPClient(const char* ip, int port, int num) {
     int res;
-    const char* msg1 = "AT+CIPCLOSE\r\n";
+    /*const char* msg1 = "AT+CIPCLOSE\r\n";
     if(UART_SendData(msg1) <= 0)
     {
         ESP_LOGE(TAG_ETH, "UART_senddata <= 0");
     }
     vTaskDelay(1000 / portTICK_RATE_MS);
 
-    res = UART_GetReturnValue(1000, "OK", NULL);
+    res = UART_GetReturnValue(1000, "OK", NULL);*/
 
-    //delay(500);
     char msg2[100];
     snprintf(msg2, 100, "AT+CIPSTART=%d,\"TCP\",\"%s\",%d\r\n",num, ip, port);
-    //sendCMD("AT+CIPSTART=\"TCP\",\"" + ip + "\"," + char*(port));
     if(UART_SendData(msg2) <= 0)
     {
         ESP_LOGE(TAG_ETH, "UART_senddata <= 0");

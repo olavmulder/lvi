@@ -8,37 +8,20 @@ const char *TAG_COMM = "communication";
  */
 int ReceiveData()
 {
-   /*switch (comState)
-   {
-      case COMMUNICATION_NONE:
-         return -4;
-         break;
-      case COMMUNICATION_WIRED:
-      //-1 failure, -2 no data, -3 not my data 0 sucess
-         return ReceiveEth();
-         break;
-      case COMMUNICATION_WIRELESS:
-      //TODO: error handling
-         return ReceiveWiFiMesh();
-      default:
-         return -5;
-         break;
-      }*/
-      //ESP_LOGI(TAG_COMM, "%s: is_eth_connected=%d", __func__, is_eth_connected);
+ 
    if(is_eth_connected)
    {
       if(ReceiveEth() == 0){
-         ESP_LOGI(TAG_COMM, "received eth");
+         //ESP_LOGI(TAG_COMM, "received eth");
       }
    }
    if(is_mesh_connected)
    {
       if(ReceiveWiFiMesh() == 0){
-         ESP_LOGI(TAG_COMM, "received wifi");
+         //ESP_LOGI(TAG_COMM, "received wifi");
       }else
       {
          //ESP_LOGW(TAG_COMM, "tried received wifi but failed");
-
       }
    }
    return 0;
@@ -62,16 +45,13 @@ int SendData(char* msg, size_t len)
       case COMMUNICATION_WIRED:
          if(xSemaphoreTake( xSemaphoreEth, ( TickType_t ) 1000 ) == pdTRUE)
          {
-            //if(currentServerIPCount_ETH != -1)
                res = SendTCPData(msg, len, currentServerIPCount_ETH+1);
-            //else res = -1;
             if(res < 0)
             {
                ESP_LOGW(TAG_COMM, "send eth failed");
                is_eth_connected = false;
             }else
             {
-               ESP_LOGI(TAG_COMM, "send eth");
                is_eth_connected = true;
             }
             xSemaphoreGive(xSemaphoreEth);
@@ -79,7 +59,6 @@ int SendData(char* msg, size_t len)
          break;
       case COMMUNICATION_WIRELESS:
          res =  SendWiFiMesh((uint8_t*)msg, len, false);
-         //printf(TAG_COMM, "%s: res %d", __func__, res);
          //if res is negatif, there is no connection, so mesh_connect is false
          if(res < 0)
          {
@@ -87,7 +66,6 @@ int SendData(char* msg, size_t len)
             is_mesh_connected = false;
          }else{
             is_mesh_connected = true;
-            ESP_LOGI(TAG_COMM, "send wifi done");
          }
          break;
       default:
@@ -117,7 +95,6 @@ int SendToServer()
    char tmp[LENGTH_IP];
    if(comState == COMMUNICATION_WIRELESS)
    {
-      //ESP_LOGI(TAG_COMM, "%s wireless communication", __func__);
       strcpy(r.mac, mac_wifi);
       uint16_t port = 0;
       if(esp_mesh_is_root())
@@ -141,7 +118,6 @@ int SendToServer()
    }
    else if(comState == COMMUNICATION_WIRED)
    {
-      //ESP_LOGI(TAG_COMM, "%s wired communication", __func__);
       strcpy(tmp, ip_eth);
       uint16_t port = TCP_SOCKET_SERVER_PORT;
       strcpy(r.mac, mac_eth);
@@ -157,6 +133,4 @@ int SendToServer()
       return -2;
    }
    return SendData(buf, strlen(buf));
-   
 }
-
