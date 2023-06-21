@@ -78,13 +78,8 @@ int ExtractDataFromMsg(char* msg, mesh_data* r)
 int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
 {
     cJSON *obj = cJSON_CreateObject();
-    cJSON *data;
-    cJSON *node;
-    cJSON *id;
-    cJSON *ip;
-    cJSON *mac;
-    cJSON *port;
-    cJSON *isAlive;
+    cJSON *data = NULL;
+    cJSON *node = NULL;
 
     if (obj == NULL)
     {
@@ -102,6 +97,13 @@ int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
     {
         goto end;
     }
+    if(strlen(ip_wifi) > 0) 
+    {
+        if (cJSON_AddStringToObject(obj, nameIP, ip_wifi) == NULL)
+        {
+            goto end;
+        }
+    }
     data = cJSON_CreateArray();
     if (data == NULL)
     {
@@ -116,40 +118,47 @@ int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
             goto end;
         }
         cJSON_AddItemToArray(data, node);
-        id = cJSON_CreateNumber(dataStrip->childArr[i]->id);
+        /*id = cJSON_CreateNumber(dataStrip->childArr[i]->id);
         if (id == NULL)
         {
             goto end;
         }
-        cJSON_AddItemToObject(node, nameID, id);
-
-        port = cJSON_CreateNumber(dataStrip->childArr[i]->port);
+        cJSON_AddItemToObject(node, nameID, id);*/
+        cJSON_AddNumberToObject(node, nameID, dataStrip->childArr[i]->id);
+        
+        /*port = cJSON_CreateNumber(dataStrip->childArr[i]->port);
         if (port == NULL)
         {
             goto end;
         }
-        cJSON_AddItemToObject(node, namePort, port);
+        cJSON_AddItemToObject(node, namePort, port);*/
+        cJSON_AddNumberToObject(node, namePort, dataStrip->childArr[i]->port);
         
-        ip = cJSON_CreateString(dataStrip->childArr[i]->ip_wifi);
+        /*ip = cJSON_CreateString(dataStrip->childArr[i]->ip_wifi);
         if (ip == NULL)
         {
             goto end;
         }
-        cJSON_AddItemToObject(node, nameIP, ip);
-
-        mac = cJSON_CreateString(dataStrip->childArr[i]->mac_wifi);
+        cJSON_AddItemToObject(node, nameIP, ip);*/
+        cJSON_AddStringToObject(node, nameIP, dataStrip->childArr[i]->ip_wifi);
+        
+        /*mac = cJSON_CreateString(dataStrip->childArr[i]->mac_wifi);
         if (mac == NULL)
         {
             goto end;
         }
-        cJSON_AddItemToObject(node, nameMAC, mac);
+        cJSON_AddItemToObject(node, nameMAC, mac);*/
+        cJSON_AddStringToObject(node, nameMAC, dataStrip->childArr[i]->mac_wifi);
 
-        isAlive = cJSON_CreateNumber(dataStrip->childArr[i]->isAlive);
+
+        /*isAlive = cJSON_CreateNumber(dataStrip->childArr[i]->isAlive);
         if (mac == NULL)
         {
             goto end;
         }
-        cJSON_AddItemToObject(node, nameIsAlive, isAlive);
+        cJSON_AddItemToObject(node, nameIsAlive, isAlive);*/
+        cJSON_AddNumberToObject(node, nameIsAlive, dataStrip->childArr[i]->isAlive);
+        
     }
     char* string = cJSON_Print(obj);
     if(string == NULL)
@@ -159,8 +168,10 @@ int MakeMsgStringHeartbeat(uint8_t* msg, strip_t* dataStrip)
     {
         if(strlen(string) < 2000)
             snprintf((char*)msg, strlen(string)+1, "%s", string);
+        free(string);
     }
-    cJSON_Delete(obj);
+    if(obj != NULL)
+        cJSON_Delete(obj);
     return 0;
     end:
         if(obj != NULL)
@@ -376,7 +387,8 @@ mesh_data HandleIncomingCMD(mesh_addr_t *from, char* data)
                     if(cJSON_IsNumber(jsonPort))
                         child->childArr[0]->port = jsonPort->valueint;
                 }               
-                snprintf(child->childArr[0]->mac_wifi, 20, "%s", jsonMAC->valuestring);
+                if(strlen(jsonMAC->valuestring) > 0)
+                    snprintf(child->childArr[0]->mac_wifi, 20, "%s", jsonMAC->valuestring);
                 child->childArr[0]->isAlive = true;
 
                 //ESP_LOGI(TAG_DATA, "%s, get send data", __func__);
